@@ -1,0 +1,133 @@
+import json
+from flask import Flask, render_template, request, jsonify
+from components import *
+from ai_player import *
+
+
+app = Flask(__name__)
+
+#counting pieces
+
+def count_pieces(board):
+    dark = 0
+    light = 0
+    for row in board:
+        for cell in row:
+            if cell == 'Dark ':
+                dark += 1
+            elif cell == 'Light':
+                light += 1
+    return dark, light
+
+
+# Global game state
+board = initialise_board()
+current_player = dark
+ai_colour = light
+
+@app.route('/')
+
+def index():
+    return render_template(
+        'index.html',
+        game_board = board
+    )
+
+@app.route('/move')
+
+def move():
+    global current_player, board
+
+    row = int(request.args.get('x'))
+    col = int(request.args.get('y'))
+    position = (row, col)
+
+    if not legal_move(current_player, position, board):
+        return jsonify({
+            'status': 'fail',
+            'message': f'Illegal move by {current_player} ',
+            'board': board
+            })
+
+    flip_pieces(current_player, position, board)
+
+    # Switch player
+    current_player = ai_colour
+    #check is AI has any moves
+    if legal_move_left(ai_colour, board):
+        ai_position = ai_move(ai_colour,board)
+        if ai_position is not None:
+            flip_pieces(ai_colour,ai_position, board)
+    else:
+        pass
+
+    current_player = dark # switch back player
+
+
+    # Check if new current player has moves
+    if not legal_move_left(current_player, board):
+        # Player passes
+        passed_player = current_player
+        if current_player == dark:
+            current_player = ai_colour
+        else:
+            current_player = dark
+
+        # Check if game ends
+        if not legal_move_left(dark, board) and not legal_move_left(ai_colour, board):
+            dark_count, light_count = count_pieces(board)
+
+            winner = "Draw"
+            if dark_count > light_count:
+                winner = "Dark wins"
+            elif light_count > dark_count:
+                winner = "Light wins"
+
+            return jsonify({
+                'finished': f'{winner} Won. Dark: {dark_count}, Light: {light_count}',
+                'board': board
+            })
+
+        return jsonify({
+            'status': 'success',
+            'board': board,
+            'player': current_player,
+            'message': f'{passed_player} passed'
+        })
+
+    return jsonify({
+        'status': 'success',
+        'board': board,
+        'player': current_player
+    })
+
+@app.route('/new_game')
+def new_game():
+    global board, current_player
+    board = initialise_board()
+    current_player = dark
+    return jsonify({'status': 'ok'})
+
+@app.route('/save_game')
+def save_game():
+    data = {
+        'board': board,
+        'current_player': current_player
+    }
+    with open('savegame.json', 'w') as f:
+        json.dump(data, f)
+    return jsonify({'status': 'saved'})
+
+@app.route('/load_game')
+def load_game():
+    global board, current_player
+    with open('savegame.json', 'r') as f:
+        data = json.load(f)
+    board = data['board']
+    current_player = data['current_player']
+    return jsonify({'status': 'loaded'})
+
+
+
+if __name__ == '__main__':
+    app.run(debug = True)
