@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Othello Board</title>
+    <style>
+        h1 {
+            background: #91b994ff;
+            padding: 25px 0;
+            margin: 0;
+            text-align: center;
+            color: #1f1f1f;
+            font-weight: 700;
+            border-radius: 20px;
+            border: solid;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Vertically align items in the middle */
+            height: 85vh; /* Full height of the viewport */
+            background: #91b994ff;
+            border-radius: 20px;
+            border:solid;
+        }
+        .board_grid {
+            display: grid;
+            grid-template-columns: repeat({{game_board|length}}, 45px);
+            grid-template-rows: repeat({{game_board|length}}, 45px);
+            gap: 1px;
+            background: #272222ff;
+            padding: 10px;
+            width: fit;
+            margin: 20px auto;
+            border-radius: 15px;
+        }
+        .cell {
+            width: 45px;
+            height: 45px;
+            background: #228B22;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+        }
+        .cell:hover {
+            background: #8df8f6ff;
+        } 
+        .piece {
+            width: 37px;
+            height: 37px;
+            border-radius: 50%;
+        }
+        .black {
+            background: #333131ff;
+        }
+        .white {
+            background: #f2e6e6ff;
+            border: 1px solid #0a0404ff;
+        }  
+        #messageBox{
+            width: 270px;
+            height: 25vh;
+            border: 2px solid #b0a7a7ff;
+            border-radius: 25px;
+            overflow-y: auto;
+            white-space: pre-line;
+            padding: 2px;
+            background: #506e55e2;
+            color: #c4c2c2ff;
+            font-size: 15px;
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: #506e55e2 #acc8b1e2;
+        }
+        .controls {
+            width: 270px;
+            height: 25vh;
+            border: 2px solid #5f5959ff;
+            border-radius: 25px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            background: #406045e2;
+            box-sizing: border-box;
+        }
+        .control-btn {
+            width: 90%;
+            padding: 8px 0;
+            background: #62a367ff;
+            color: #c4c2c2ff;
+            font-size: 15px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+        }
+        .control-btn:hover {
+            background: #778278ff;
+        }
+
+    </style>
+    <script>
+        //Get the board that is passed from the python flask code
+        let board = {{game_board|tojson}};
+        //console.log(board);
+
+        // Load the grid format once the page has loaded
+
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBoard();
+        }, false);
+
+        function sendMove(x, y, url) {
+            /**
+            * do a GET request to the server with the x and y coordinates for the move
+            * The server will respond with a JSON object containing whether the move was legal
+            */
+
+            fetch(url+'?x='+x+'&y='+y, {
+                method: 'GET',
+            })
+            .then(response => response.json())
+            .then(data => {
+                //Process the response
+                if (data['status'] === 'success'){
+                    updateMessageBox('Move accepted at (' + x + ', ' + y + ')');
+                    updateMessageBox("It's " + data['player'] + "'s turn.");
+                    //Update the board
+                    board = data['board'];
+                    
+                    //Reload the board
+                    loadBoard();}          
+                else if (data['status'] === 'fail'){
+                    updateMessageBox(data['message'] + 'made at (' + x + ', ' + y + '): ' );}
+                
+                else if (data['finished']){
+                    //Game is finished
+                    //Update the board
+                    board = data['board'];
+                    //Reload the board
+                    loadBoard();        
+                    document.getElementById('messageBox').innerHTML = data['finished'].toString();
+                    alert(data['finished'].toString());
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function loadBoard() {
+            for (let y = 0; y < board.length; y++) {
+                for (let x = 0; x < board[y].length; x++) {
+                    let cell = document.getElementById(`cell-${x}-${y}`);
+                    cell.innerHTML = ''; // Clear existing pieces
+                    if (board[y][x] === 'Dark ') {
+                        let piece = document.createElement('div');
+                        piece.className = 'piece black';
+                        cell.appendChild(piece);
+                    } else if (board[y][x] === 'Light') {
+                        let piece = document.createElement('div');
+                        piece.className = 'piece white';
+                        cell.appendChild(piece);
+                    }
+                }
+            }
+        }
+
+        function updateMessageBox(message) {
+            let messageBox = document.getElementById('messageBox');
+            messageBox.innerHTML += message + '\n';
+            messageBox.scrollTop = messageBox.scrollHeight; // Auto-scroll to the bottom
+        }
+    </script>
+</head>
+<body>
+    <h1 style="text-align:center;">Othello/Reversi Game</h1>
+    <div class="container">
+
+    <div id="messageBox">
+        <h2>Game Log:</h2>
+    </div>
+
+    <div class="board_grid">
+        {% for i in range(game_board|length) %}
+            {% for j in range(game_board|length) %}
+                <div class="cell"
+                     id="cell-{{ j }}-{{ i }}"
+                     onclick="sendMove({{ i }}, {{ j }}, '/move')">
+                    {% if game_board[i][j] == 'Dark ' %}
+                        <div class="piece black"></div>
+                    {% elif game_board[i][j] == 'Light' %}
+                        <div class="piece white"></div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+    <div class="controls">
+    <button class="control-btn" onclick="fetch('/new_game').then(() => location.reload())">
+        New Game
+    </button>
+    <button class="control-btn" onclick="fetch('/save_game')">
+        Save Game
+    </button>
+    <button class="control-btn" onclick="fetch('/load_game').then(() => location.reload())">
+        Load Game
+    </button>
+</div>
+
+</div>
